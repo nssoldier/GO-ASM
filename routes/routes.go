@@ -9,7 +9,7 @@ import (
 func Create() (g *gin.Engine) {
 
 	g = gin.Default()
-	// g.Use(static.Serve("/image", static.LocalFile("/image", true)))
+
 	v1 := g.Group("/v1")
 	{
 		v1.POST("/registration", Registration)
@@ -22,6 +22,8 @@ func Create() (g *gin.Engine) {
 			// add account handlers
 			account.GET("", GetAccount)
 			account.PUT("", UpdateAccount)
+			account.PUT("/password", ChangePassword)
+			account.PUT("/avatar", SetAvatar)
 			account.DELETE("", DeleteAccount)
 		}
 
@@ -34,6 +36,7 @@ func Create() (g *gin.Engine) {
 			gallery.GET("", GetAllGalleries)
 			gallery.GET("/:id", GetGallery)
 			gallery.PUT("/:id", UpdateGallery)
+			gallery.PUT("/:id/publication", PublicGallery)
 			gallery.DELETE("/:id", DeleteGallery)
 		}
 		photo := v1.Group("/photo")
@@ -53,8 +56,9 @@ func Create() (g *gin.Engine) {
 			// add public handlers
 
 			public.GET("/gallery", GetPublicGalleries)
-			public.GET("/gallery/:id", GetPublicGallery)
+			public.GET("/gallery/id/:id", GetPublicGallery)
 			public.GET("/photo/:id", GetPublicPhoto)
+			public.GET("/photo/:id/w/:width", DownloadPhotoByWidth)
 			public.GET("/account/:id", GetPublicAccount)
 
 		}

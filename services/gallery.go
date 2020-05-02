@@ -41,7 +41,12 @@ func GetAllGalleries(accountId uint) (galleries *[]models.Gallery, err error) {
 			fmt.Println(err)
 			return
 		}
-		(*galleries)[index].Photos = photos
+
+		if len(photos) > 3 {
+			(*galleries)[index].Photos = photos[0:2]
+		} else {
+			(*galleries)[index].Photos = photos
+		}
 	}
 
 	return
@@ -63,16 +68,20 @@ func GetPublicGalleries() (galleries *[]models.Gallery, err error) {
 			fmt.Println(err)
 			return
 		}
-		(*galleries)[index].Photos = photos
+		if len(photos) > 3 {
+			(*galleries)[index].Photos = photos[0:2]
+		} else {
+			(*galleries)[index].Photos = photos
+		}
 	}
 
 	return
 }
 
-func GetGalleryById(galleryId uint) (gallery *models.Gallery, err error) {
+func GetGalleryById(accountId uint, galleryId uint) (gallery *models.Gallery, err error) {
 
 	gallery = &models.Gallery{}
-	err = DB.First(gallery, galleryId).Error
+	err = DB.Where("id = ? and account_id = ?", galleryId, accountId).First(gallery, galleryId).Error
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -91,7 +100,31 @@ func GetGalleryById(galleryId uint) (gallery *models.Gallery, err error) {
 func GetPublicGalleryById(galleryId uint) (gallery *models.Gallery, err error) {
 
 	gallery = &models.Gallery{}
-	err = DB.First(gallery, galleryId).Error
+	err = DB.Where("id = ?", galleryId).First(gallery, galleryId).Error
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if !gallery.Visibility {
+		err = errors.New("Can not find this public gallery")
+		return
+	}
+
+	photos, err := getPhotosByGallery(*gallery)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	gallery.Photos = photos
+
+	return
+}
+
+func GetPublicGalleryByName(galleryName string) (gallery *models.Gallery, err error) {
+
+	gallery = &models.Gallery{}
+	err = DB.Where("name = ?", galleryName).First(gallery).Error
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -124,11 +157,15 @@ func UpdateGallery(accountId uint, galleryId uint, newGallery *models.Gallery) (
 	if newGallery.Name != "" {
 		gallery.Name = newGallery.Name
 	}
-	if newGallery.Visibility != gallery.Visibility {
-		gallery.Visibility = newGallery.Visibility
+	if newGallery.Brief != "" {
+		gallery.Brief = newGallery.Brief
 	}
 
 	err = DB.Save(gallery).Error
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	photos, err := getPhotosByGallery(*gallery)
 	if err != nil {
@@ -136,6 +173,28 @@ func UpdateGallery(accountId uint, galleryId uint, newGallery *models.Gallery) (
 		return
 	}
 	gallery.Photos = photos
+	return
+}
+
+func PublicGallery(accountId uint, galleryId uint) (err error) {
+	gallery := &models.Gallery{}
+	err = DB.Where("id = ? and account_id = ?", galleryId, accountId).First(gallery).Error
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if !gallery.Visibility {
+		gallery.Visibility = true
+	}
+
+	err = DB.Save(gallery).Error
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	return
 }
 
@@ -155,10 +214,22 @@ func DeleteGallery(accountId uint, galleryId uint) (err error) {
 
 func getPhotosByGallery(gallery models.Gallery) (photos []models.Photo, err error) {
 	photos = []models.Photo{}
-	err = DB.Model(&gallery).Related(&photos).Error
+	err = DB.Where("gallery_id = ?", gallery.Id).Find(&photos).Error
+
 	if err != nil {
 		fmt.Println(err)
 		return
+	}
+
+	for index, photo := range photos {
+		reactions := []models.Reaction{}
+		reactions, err = GetReactionsByPhoto(photo)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		photos[index].ReactionCount = len(reactions)
 	}
 
 	return

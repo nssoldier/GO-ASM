@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"gallery/models"
 	"gallery/services"
+	"log"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -20,6 +22,7 @@ func CreatePhoto(ctx *gin.Context) {
 		return
 	}
 
+	services.Logger.Debugf("Create photo by id=[%d]", accountID)
 	galleryId := ctx.PostForm("galleryId")
 	id, err := strconv.ParseUint(galleryId, 10, 64)
 
@@ -32,7 +35,7 @@ func CreatePhoto(ctx *gin.Context) {
 	photo.Name = ctx.PostForm("name")
 	photo.Description = ctx.PostForm("description")
 
-	path, size, err := saveUploadedFileToDirectory(ctx)
+	path, size, err := saveUploadedFileToDirectory(ctx, "uploads/"+fmt.Sprint(accountID)+"/galleries/"+fmt.Sprint(galleryId)+"/")
 	if err != nil {
 		fmt.Println(err)
 		ctx.AbortWithError(400, errors.New("Can not save uploaded file"))
@@ -56,6 +59,12 @@ func CreatePhoto(ctx *gin.Context) {
 func GetPhoto(ctx *gin.Context) {
 	photo := &models.Photo{}
 
+	accountID, exists := ctx.Get("account_id")
+	if !exists {
+		ctx.AbortWithError(401, errors.New("Unauthorized"))
+		return
+	}
+
 	photoId := ctx.Param("id")
 
 	id, err := strconv.ParseUint(photoId, 10, 64)
@@ -66,7 +75,8 @@ func GetPhoto(ctx *gin.Context) {
 		return
 	}
 
-	photo, err = services.GetPhotoById(uint(id))
+	services.Logger.Debugf("Get photo with photoId=[%d] by id=[%d]", id, accountID)
+	photo, err = services.GetPhotoById(uint(id), accountID.(uint))
 
 	if err != nil {
 		fmt.Println(err)
@@ -93,26 +103,27 @@ func UpdatePhoto(ctx *gin.Context) {
 		return
 	}
 	galleryId := ctx.PostForm("galleryId")
-	id, err = strconv.ParseUint(galleryId, 10, 64)
+	gid, err := strconv.ParseUint(string(galleryId), 10, 64)
+
+	services.Logger.Debugf("Update photo with photoId=[%d] by id=[%d]", id, accountID)
 
 	if err != nil {
 		ctx.AbortWithError(400, errors.New("Can not convert gallery id"))
 		return
 	}
 
-	photo.GalleryId = uint(id)
+	photo.GalleryId = uint(gid)
 	photo.Name = ctx.PostForm("name")
 	photo.Description = ctx.PostForm("description")
 
-	path, size, err := saveUploadedFileToDirectory(ctx)
+	path, size, err := saveUploadedFileToDirectory(ctx, "uploads/"+accountID.(string)+"/galleries/"+galleryId+"/")
 	if err != nil {
 		fmt.Println(err)
-		ctx.AbortWithError(400, errors.New("Can not save uploaded file"))
-		return
+		// ctx.AbortWithError(400, errors.New("Can not save uploaded file"))
+	} else {
+		photo.Path = path
+		photo.Size = size
 	}
-
-	photo.Path = path
-	photo.Size = size
 
 	photo, err = services.UpdatePhoto(accountID.(uint), uint(id), photo)
 
@@ -140,11 +151,12 @@ func DeletePhoto(ctx *gin.Context) {
 		return
 	}
 
+	services.Logger.Debugf("Delete photo with photoId=[%d] by id=[%d]", id, accountID)
 	err = services.DeleteGallery(accountID.(uint), uint(id))
 
 	if err != nil {
 		fmt.Println(err)
-		ctx.AbortWithError(400, errors.New("Get photo failed"))
+		ctx.AbortWithError(400, errors.New("Delete photo failed"))
 		return
 	}
 
@@ -163,6 +175,8 @@ func CreateReaction(ctx *gin.Context) {
 	photoId := ctx.Param("id")
 
 	id, err := strconv.ParseUint(photoId, 10, 64)
+
+	services.Logger.Debugf("Create reaction with photoId=[%d] by id=[%d]", id, accountID)
 
 	if err != nil {
 		fmt.Println(err)
@@ -204,6 +218,8 @@ func DeleteReaction(ctx *gin.Context) {
 		return
 	}
 
+	services.Logger.Debugf("Delete reaction with photoId=[%d] by id=[%d]", id, accountID)
+
 	err = services.DeleteReaction(accountID.(uint), uint(id))
 
 	if err != nil {
@@ -215,11 +231,25 @@ func DeleteReaction(ctx *gin.Context) {
 	ctx.Status(200)
 }
 
-func saveUploadedFileToDirectory(c *gin.Context) (path string, size int64, err error) {
+func saveUploadedFileToDirectory(c *gin.Context, link string) (path string, size int64, err error) {
 
 	file, err := c.FormFile("image")
+
+	if err != nil {
+		return
+	}
+	_, err = os.Stat(link)
+
+	if os.IsNotExist(err) {
+		errDir := os.MkdirAll(link, 0755)
+		if errDir != nil {
+			log.Fatal(err)
+		}
+
+	}
+
 	filename := filepath.Base(file.Filename)
-	path = "image/" + filename
+	path = link + filename
 	size = file.Size
 	if err = c.SaveUploadedFile(file, path); err != nil {
 		fmt.Println(err)

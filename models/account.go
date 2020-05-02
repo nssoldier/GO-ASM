@@ -11,6 +11,8 @@ type Account struct {
 	Name      string     `gorm:"type:VARCHAR(256);NOT NULL" json:"name"`
 	Avatar    string     `gorm:"type:VARCHAR(256);NOT NULL" json:"avatar"`
 	Email     string     `gorm:"type:VARCHAR(256);NOT NULL" json:"email"`
+	Phone     string     `gorm:"type:VARCHAR(20);NOT NULL" json:"phone"`
+	Address   string     `gorm:"type:TEXT;NOT NULL" json:"address"`
 	Password  string     `gorm:"type:VARCHAR(64);NOT NULL" json:"-"`
 	CreatedAt time.Time  `gorm:"NOT NULL" json:"created_at"`
 	UpdatedAt time.Time  `gorm:"NOT NULL" json:"updated_at"`
